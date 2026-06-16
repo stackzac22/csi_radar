@@ -1,0 +1,6 @@
+# ── ESP32-S3 overrides ────────────────────────────────────────────────────────
+# Xtensa LX7, 2.4 GHz only
+# CSI: LLTF = 52 subcarriers (HT20) — higher quality than classic ESP32
+# Used on: M5 Atom S3 (TX), AtomFly (TX), XIAO ESP32-S3 Sense (RX), Cardputer (RX)
+
+CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y

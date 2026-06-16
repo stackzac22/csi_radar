@@ -1,0 +1,7 @@
+# ── ESP32 (WROOM) overrides ───────────────────────────────────────────────────
+# Xtensa LX6, 2.4 GHz only
+# CSI: LLTF = 52 subcarriers (HT20), HTLTF = 56 (HT20)
+# No 5 GHz. Keep CONFIG_WIFI_CHANNEL = 1
+
+# Reduce log to free flash on WROOM (4 MB flash typical)
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y

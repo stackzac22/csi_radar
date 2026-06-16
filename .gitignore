@@ -1,0 +1,8 @@
+build/
+sdkconfig
+sdkconfig.old
+sdkconfig.rx-xiao.saved
+rpi/.venv/
+rpi/__pycache__/
+*.pyc
+.claude/

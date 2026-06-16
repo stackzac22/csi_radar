@@ -1,0 +1,81 @@
+menu "CSI Radar Configuration"
+
+    choice CSI_ROLE
+        prompt "Device Role"
+        default CSI_ROLE_RX
+        help
+            Select whether this device acts as a transmitter or a receiver.
+
+        config CSI_ROLE_TX
+            bool "Transmitter (TX)"
+            help
+                Broadcasts ESP-NOW pulses to trigger CSI collection on receivers.
+
+        config CSI_ROLE_RX
+            bool "Receiver (RX)"
+            help
+                Listens for ESP-NOW pulses, collects CSI data, streams to host.
+    endchoice
+
+    config DEVICE_ID
+        string "Device ID"
+        default "node-01"
+        help
+            Unique label for this device in JSON output and log messages.
+            Examples: rx-xiao, tx-atoms3, tx-wroom-01, tx-c5-dongle
+
+    config WIFI_CHANNEL
+        int "WiFi channel"
+        default 1
+        range 1 177
+        help
+            WiFi channel used for CSI collection and ESP-NOW.
+            Channels 1-13 are 2.4 GHz. Channels 36+ are 5 GHz (ESP32-C5 only).
+
+    config WIFI_SSID
+        string "Wi-Fi SSID (RX only)"
+        default "myssid"
+        depends on CSI_ROLE_RX
+        help
+            SSID of the network the RX device connects to for HTTP notifications.
+
+    config WIFI_PASSWORD
+        string "Wi-Fi Password (RX only)"
+        default "mypassword"
+        depends on CSI_ROLE_RX
+        help
+            Password for the above network.
+
+    config NOTIFY_URL
+        string "Notification URL (RX only)"
+        default "http://100.64.0.1:5000/alert"
+        depends on CSI_ROLE_RX
+        help
+            HTTP POST endpoint for motion/gesture alerts.
+            Set to the RPi 4B Tailscale IP: http://100.x.x.x:5000/alert
+
+    config CSI_SERIAL_OUTPUT
+        bool "Stream CSI frames over serial (JSON)"
+        default y
+        depends on CSI_ROLE_RX
+        help
+            Output each CSI frame as a newline-delimited JSON object on stdout.
+            The RPi reads this via USB serial (/dev/ttyUSB0) for visualization
+            and gesture classification. Disable for standalone motion-only mode.
+
+    config MOTION_THRESHOLD
+        int "Motion detection threshold (x10)"
+        default 150
+        range 10 5000
+        help
+            CSI magnitude variance threshold for motion detection, scaled x10.
+            Default 150 = 15.0. Increase to reduce false positives.
+
+    config DEBOUNCE_MS
+        int "Motion debounce time (ms)"
+        default 5000
+        range 500 60000
+        help
+            Minimum milliseconds between motion alert notifications.
+
+endmenu

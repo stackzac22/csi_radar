@@ -1,0 +1,12 @@
+# ── ESP32-C5 overrides ────────────────────────────────────────────────────────
+# RISC-V, 2.4 GHz + 5 GHz (WiFi 6 / 802.11ax)
+# Used on: Waveshare C5 dev board (TX), LilyGo T-Dongle C5 (TX)
+#
+# 5 GHz operation:
+#   Change CONFIG_WIFI_CHANNEL to a 5 GHz channel (36, 40, 44, 48, 149, 153, 157, 161)
+#   via: idf.py -B build/tx-esp32c5 menuconfig → CSI Radar Configuration → WiFi channel
+#
+# Uses wifi_csi_acquire_config_t (HE bitfield struct) instead of bool struct.
+# The firmware handles this automatically via #ifdef CONFIG_SOC_WIFI_HE_SUPPORT.
+
+CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y

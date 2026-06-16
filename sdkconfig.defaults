@@ -1,0 +1,12 @@
+# ── Common defaults for all CSI Radar builds ──────────────────────────────────
+# Applied to all targets. Target-specific overrides go in sdkconfig.defaults.<target>
+# Device-specific settings (SSID, password, notify URL, role, device ID)
+# must be set via: idf.py -B build/<dir> menuconfig
+
+CONFIG_ESP_WIFI_CSI_ENABLED=y
+
+# Increase log buffer for JSON serial output
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# Increase main task stack for HTTP client
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
