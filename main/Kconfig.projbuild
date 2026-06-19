@@ -46,13 +46,35 @@ menu "CSI Radar Configuration"
         help
             Password for the above network.
 
-    config NOTIFY_URL
-        string "Notification URL (RX only)"
-        default "http://100.64.0.1:5000/alert"
+    config MQTT_BROKER_URI
+        string "MQTT broker URI (RX only)"
+        default "mqtt://100.64.0.1:1883"
         depends on CSI_ROLE_RX
         help
-            HTTP POST endpoint for motion/gesture alerts.
-            Set to the RPi 4B Tailscale IP: http://100.x.x.x:5000/alert
+            URI of the MQTT broker (mosquitto on the RPi 4B) that motion events
+            are published to. Set to the RPi Tailscale IP, e.g.
+            mqtt://100.x.x.x:1883
+
+    config MQTT_MOTION_TOPIC
+        string "MQTT motion topic (RX only)"
+        default "csi/motion"
+        depends on CSI_ROLE_RX
+        help
+            Topic the RX publishes motion alerts to. The payload is a JSON
+            object with trigger/id/chip/diff and, when the camera is enabled,
+            the snapshot and stream URLs the device serves.
+
+    config ENABLE_CAMERA
+        bool "Onboard camera snapshot server (RX only)"
+        default y
+        depends on CSI_ROLE_RX && IDF_TARGET_ESP32S3
+        help
+            XIAO ESP32-S3 Sense only. Initialises the onboard OV2640 and serves
+            /snapshot (single JPEG) and /stream (MJPEG) over HTTP on port 80.
+            On motion, the snapshot URL is included in the MQTT alert so a
+            subscriber can grab the frame. Requires PSRAM (enabled via
+            sdkconfig.defaults.rx-camera). Disable for RX boards without a
+            camera, e.g. the Cardputer.
 
     config CSI_SERIAL_OUTPUT
         bool "Stream CSI frames over serial (JSON)"

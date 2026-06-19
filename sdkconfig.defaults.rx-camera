@@ -1,0 +1,20 @@
+# ── RX + camera build (XIAO ESP32-S3 Sense) ──────────────────────────────────
+# Applied ONLY to the rx-esp32s3 variant by build_all.sh, on top of
+# sdkconfig.defaults + sdkconfig.defaults.esp32s3. Keeps PSRAM/camera config
+# off the Atom S3 TX build, which shares the esp32s3 target but has no PSRAM.
+
+# Octal PSRAM — required for the OV2640 frame buffer
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
+CONFIG_SPIRAM_RODATA=y
+# Don't hard-fault if PSRAM is ever absent — log and continue
+CONFIG_SPIRAM_IGNORE_NOTFOUND=y
+
+# 8 MB flash + a larger app partition (camera + mqtt + http server + wifi)
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+
+# Run the CPU flat-out; camera + CSI capture are both timing sensitive
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y

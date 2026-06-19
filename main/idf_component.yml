@@ -1,0 +1,17 @@
+## Managed component dependencies for the CSI Radar firmware.
+##
+## esp-mqtt: as of ESP-IDF 6.x the MQTT client was moved out of the core
+## components into the registry, so it must be pulled in here. Needed by all
+## RX builds (the alert transport). It pulls tcp_transport, which is still core.
+##
+## esp32-camera: only pulled for chips with a DVP camera interface + PSRAM that
+## actually run the RX (camera) role. The rule keeps it out of the ESP32-C5 TX
+## build, which the component does not support. Target names must be quoted
+## string literals or the expression evaluates false.
+dependencies:
+  espressif/mqtt:
+    version: "*"
+  espressif/esp32-camera:
+    version: "*"
+    rules:
+      - if: 'target == "esp32s3"'

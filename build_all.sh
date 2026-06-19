@@ -35,7 +35,7 @@ declare -A VARIANTS=(
     ["rx-esp32s3"]="esp32s3"
 )
 
-ROLE_HINT=(
+declare -A ROLE_HINT=(
     ["tx-esp32"]="TX  → WROOM x2"
     ["tx-esp32s3"]="TX  → Atom S3, AtomFly"
     ["tx-esp32c5"]="TX  → Waveshare C5, T-Dongle C5 (5GHz capable)"
@@ -57,8 +57,23 @@ build_variant() {
 
     mkdir -p "$build_dir"
 
+    # RX variants get the camera/PSRAM overlay on top of the shared defaults.
+    # IDF auto-appends ".<target>" to each file in the list, so the esp32s3
+    # base still applies. TX variants keep the plain default behaviour.
+    local sdkconfig_defaults_arg=()
+    if [[ "$name" == rx-* ]]; then
+        sdkconfig_defaults_arg=(-D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.rx-camera")
+    fi
+
+    # Each variant keeps its own sdkconfig INSIDE its build dir. IDF otherwise
+    # defaults SDKCONFIG to the project root, so building different targets in
+    # sequence collides ("Target 'esp32s3' ... does not match 'esp32'"). Keeping
+    # it per-variant also keeps each board's Wi-Fi creds in its own gitignored
+    # build/<variant>/sdkconfig.
     idf.py \
         -D IDF_TARGET="${target}" \
+        -D SDKCONFIG="${build_dir}/sdkconfig" \
+        "${sdkconfig_defaults_arg[@]}" \
         -B "${build_dir}" \
         build
 
@@ -95,5 +110,5 @@ echo "═══ Done. Before first flash, customize each build: ═════�
 echo "  idf.py -B build/tx-esp32    menuconfig   # set DEVICE_ID, channel"
 echo "  idf.py -B build/tx-esp32s3  menuconfig   # set DEVICE_ID, channel"
 echo "  idf.py -B build/tx-esp32c5  menuconfig   # set DEVICE_ID, channel (36+ for 5GHz)"
-echo "  idf.py -B build/rx-esp32s3  menuconfig   # set DEVICE_ID, SSID, password, notify URL"
+echo "  idf.py -B build/rx-esp32s3  menuconfig   # set DEVICE_ID, SSID, password, MQTT broker URI"
 echo "════════════════════════════════════════════════════════════════════════"

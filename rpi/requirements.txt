@@ -2,3 +2,5 @@ pyserial
 flask
 flask-sock
 requests
+websocket-client
+paho-mqtt

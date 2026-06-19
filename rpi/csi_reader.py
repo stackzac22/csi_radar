@@ -33,8 +33,22 @@ parser.add_argument("--baud",      default=115200, type=int)
 parser.add_argument("--host",      default="0.0.0.0",  help="Dashboard bind address")
 parser.add_argument("--web-port",  default=5000, type=int, help="Dashboard HTTP port")
 parser.add_argument("--alert-url", default=None, help="RaspyJack/RPi alert endpoint")
-parser.add_argument("--motion-thresh", default=4.0, type=float,
-                    help="Variance threshold for motion detection")
+parser.add_argument("--motion-thresh", default=60.0, type=float,
+                    help="Subcarrier-variance-sum threshold for motion. Calibrated "
+                         "2026-06-16: idle tops out ~40, motion starts ~90. 'gesture' "
+                         "(strong motion) fires at 4x this. Re-measure if geometry changes.")
+# ── Coarse control: fire an action on confirmed sustained motion ─────────────────
+parser.add_argument("--action-url", default=None,
+                    help="URL to fire on confirmed motion (e.g. a Home Assistant webhook). "
+                         "POSTed JSON by default; use --action-method GET for plain webhooks.")
+parser.add_argument("--action-method", default="POST", choices=["POST", "GET"],
+                    help="HTTP method for --action-url")
+parser.add_argument("--action-cmd", default=None,
+                    help="Shell command to run on confirmed motion (e.g. a CLI to toggle a plug)")
+parser.add_argument("--action-min-frames", default=3, type=int,
+                    help="Consecutive motion frames required before firing (debounces noise)")
+parser.add_argument("--action-cooldown", default=8.0, type=float,
+                    help="Minimum seconds between fired actions")
 args = parser.parse_args()
 
 # ── Logging ────────────────────────────────────────────────────────────────────
@@ -49,6 +63,7 @@ WIN_MOTION  = 20                         # sliding window for motion variance
 frame_lock    = threading.Lock()
 frame_history: deque = deque(maxlen=HISTORY)
 mean_history:  deque = deque(maxlen=WIN_MOTION)
+mags_history:  deque = deque(maxlen=WIN_MOTION)
 latest: dict         = {}
 motion_state: str    = "init"
 
@@ -74,14 +89,33 @@ def variance(vals: list) -> float:
     return sum((v - mu) ** 2 for v in vals) / len(vals)
 
 
-def classify_motion(mean_mag: float) -> str:
-    mean_history.append(mean_mag)
-    if len(mean_history) < 5:
+def subcarrier_var_sum(window: list) -> float:
+    """Sum of each subcarrier's temporal variance across the window.
+
+    This is the real coarse-motion signal. The scalar mean magnitude collapses
+    all subcarriers into one number, so motion that pushes subcarriers in
+    opposite directions cancels out (measured 2026-06-16: mean-variance does NOT
+    separate motion from idle, but this does — still tops out ~40, motion ~90+).
+    """
+    if len(window) < 2:
+        return 0.0
+    L = min(len(m) for m in window)
+    total = 0.0
+    for i in range(L):
+        col = [m[i] for m in window]
+        total += variance(col)
+    return total
+
+
+def classify_motion(mags: list) -> str:
+    mags_history.append(mags)
+    mean_history.append(sum(mags) / len(mags) if mags else 0.0)  # kept for display
+    if len(mags_history) < 5:
         return "init"
-    var = variance(list(mean_history))
-    if var > args.motion_thresh * 3:
+    score = subcarrier_var_sum(list(mags_history))
+    if score > args.motion_thresh * 4:
         return "gesture"
-    if var > args.motion_thresh:
+    if score > args.motion_thresh:
         return "motion"
     return "still"
 
@@ -112,6 +146,60 @@ def send_alert(state: str, frame: dict):
         log.warning("Alert failed: %s", e)
 
 
+# ── Coarse control: action trigger ──────────────────────────────────────────────
+import subprocess
+
+_motion_run   = 0       # consecutive motion/gesture frames seen
+_action_armed = True    # must return to "still" before firing again
+_last_action  = 0.0
+
+def fire_action(frame: dict):
+    """Fire the user-configured webhook and/or shell command on confirmed motion."""
+    global _last_action
+    now = time.time()
+    if now - _last_action < args.action_cooldown:
+        return
+    _last_action = now
+    fired = []
+    if args.action_url:
+        try:
+            if args.action_method == "GET":
+                requests.get(args.action_url, timeout=3)
+            else:
+                requests.post(args.action_url, json={
+                    "event":    "motion",
+                    "state":    frame.get("motion"),
+                    "mean_mag": frame.get("mean_mag"),
+                    "id":       frame.get("id"),
+                    "ts":       frame.get("ts_wall"),
+                }, timeout=3)
+            fired.append(f"{args.action_method} {args.action_url}")
+        except Exception as e:
+            log.warning("action-url failed: %s", e)
+    if args.action_cmd:
+        try:
+            subprocess.Popen(args.action_cmd, shell=True)
+            fired.append(f"cmd: {args.action_cmd}")
+        except Exception as e:
+            log.warning("action-cmd failed: %s", e)
+    if fired:
+        log.info("ACTION fired → %s", "; ".join(fired))
+
+
+def update_action_trigger(new_state: str, frame: dict):
+    """Edge+sustain trigger: fire once after N consecutive motion frames, then
+    re-arm only after motion settles back to still."""
+    global _motion_run, _action_armed
+    if new_state in ("motion", "gesture"):
+        _motion_run += 1
+        if _action_armed and _motion_run >= args.action_min_frames:
+            fire_action(frame)
+            _action_armed = False
+    elif new_state == "still":
+        _motion_run = 0
+        _action_armed = True
+
+
 # ── Frame processing ───────────────────────────────────────────────────────────
 def process(raw: dict) -> dict | None:
     global motion_state
@@ -126,20 +214,24 @@ def process(raw: dict) -> dict | None:
         return None
 
     mean_mag = sum(active) / len(active)
-    new_state = classify_motion(mean_mag)
+    new_state = classify_motion(mags)
+    motion_score = subcarrier_var_sum(list(mags_history))
 
     frame = {
         **raw,
         "mags":         [round(m, 2) for m in mags],
         "mean_mag":     round(mean_mag, 2),
+        "motion_score": round(motion_score, 1),
         "n_active":     len(active),
         "motion":       new_state,
         "ts_wall":      datetime.utcnow().isoformat(timespec="milliseconds"),
     }
 
     if new_state in ("motion", "gesture") and motion_state == "still":
-        log.info("STATE → %s (mean=%.2f)", new_state, mean_mag)
+        log.info("STATE → %s (score=%.1f mean=%.2f)", new_state, motion_score, mean_mag)
         send_alert(new_state, frame)
+
+    update_action_trigger(new_state, frame)
 
     motion_state = new_state
     return frame

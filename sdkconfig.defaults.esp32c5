@@ -10,3 +10,10 @@
 # The firmware handles this automatically via #ifdef CONFIG_SOC_WIFI_HE_SUPPORT.
 
 CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
+
+# The C5 carries the dual-band (2.4/5 GHz) Wi-Fi stack, so its app image is
+# ~1.06 MB — larger than the esp32/esp32s3 TX images and over the default 1 MB
+# single-app partition. Use the large single-app layout (~1.5 MB app) so it
+# fits. The Waveshare/T-Dongle C5 modules ship with >=4 MB flash.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
